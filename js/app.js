@@ -995,21 +995,48 @@ window.updateReviewItemName = (idx, val) => {
 };
 
 window.updateReviewItemPrice = (idx, val) => {
-  if (appState.reviewItems[idx]) appState.reviewItems[idx].price = parseFloat(val) || 0;
+  if (appState.reviewItems[idx]) {
+    const oldPrice = Number(appState.reviewItems[idx].price) || 0;
+    const newPrice = parseFloat(val) || 0;
+    const diff = newPrice - oldPrice;
+    appState.reviewItems[idx].price = newPrice;
+
+    const totalInput = document.getElementById('reviewTotal');
+    if (totalInput) {
+      const currentTotal = parseFloat(totalInput.value) || 0;
+      const updatedTotal = Math.max(0, Math.round((currentTotal + diff) * 100) / 100);
+      totalInput.value = updatedTotal.toFixed(2);
+    }
+  }
 };
 
 window.removeReviewItem = (idx) => {
-  appState.reviewItems.splice(idx, 1);
-  renderReviewItemsTable();
+  if (idx >= 0 && idx < appState.reviewItems.length) {
+    const removedPrice = Number(appState.reviewItems[idx].price) || 0;
+    const totalInput = document.getElementById('reviewTotal');
+    if (totalInput) {
+      const currentTotal = parseFloat(totalInput.value) || 0;
+      const newTotal = Math.max(0, Math.round((currentTotal - removedPrice) * 100) / 100);
+      totalInput.value = newTotal.toFixed(2);
+    }
+    appState.reviewItems.splice(idx, 1);
+    renderReviewItemsTable();
+  }
 };
 
 function addReviewItemRow() {
+  const newItemPrice = 1.00;
   appState.reviewItems.push({
     name: 'Neuer Artikel',
-    price: 1.00,
+    price: newItemPrice,
     quantity: 1,
     category: document.getElementById('reviewCategory').value
   });
+  const totalInput = document.getElementById('reviewTotal');
+  if (totalInput) {
+    const currentTotal = parseFloat(totalInput.value) || 0;
+    totalInput.value = (currentTotal + newItemPrice).toFixed(2);
+  }
   renderReviewItemsTable();
 }
 
