@@ -401,6 +401,12 @@ function initEventListeners() {
   document.getElementById('btnDoneDetail').addEventListener('click', closeDetailModal);
   document.getElementById('btnDeleteTxn').addEventListener('click', handleDeleteCurrentTxn);
 
+  // Pantry Detail Modal
+  const btnClosePantryDetail = document.getElementById('btnClosePantryDetail');
+  const btnDonePantryDetail = document.getElementById('btnDonePantryDetail');
+  if (btnClosePantryDetail) btnClosePantryDetail.addEventListener('click', closePantryDetailModal);
+  if (btnDonePantryDetail) btnDonePantryDetail.addEventListener('click', closePantryDetailModal);
+
   // Analyse Timeframe Filter
   document.querySelectorAll('#timeframeFilter .segment-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1676,6 +1682,7 @@ function getDeduplicatedPantryItems(allItems) {
       seenMap.set(normKey, true);
       pantryItems.push({
         ...item,
+        normKey: normKey,
         pantryCat: classification
       });
     }
@@ -1709,6 +1716,35 @@ function renderPantry() {
     );
   }
 
+  // 4. Kategorie-Zusammenfassungs-Banner (Option B) berechnen
+  let summarySpent = 0;
+  let summaryLabel = 'Alle WG-Vorräte';
+  let summaryIcon = '🥫';
+
+  if (activeCat && activeCat !== 'all' && PANTRY_CATEGORIES[activeCat]) {
+    summaryLabel = PANTRY_CATEGORIES[activeCat].label;
+    summaryIcon = PANTRY_CATEGORIES[activeCat].icon;
+  }
+
+  // Gesamtausgaben für die gewählte Kategorie über alle bisherigen Einkäufe summieren
+  appState.items.forEach(it => {
+    const cls = classifyPantryItem(it);
+    if (!cls) return;
+    if (activeCat === 'all' || cls.id === activeCat) {
+      summarySpent += (Number(it.price) || 0);
+    }
+  });
+
+  const iconEl = document.getElementById('summaryIcon');
+  const labelEl = document.getElementById('summaryLabel');
+  const spentEl = document.getElementById('summaryTotalSpent');
+  const countEl = document.getElementById('summaryItemCount');
+
+  if (iconEl) iconEl.textContent = summaryIcon;
+  if (labelEl) labelEl.textContent = summaryLabel;
+  if (spentEl) spentEl.textContent = formatEuro(summarySpent);
+  if (countEl) countEl.textContent = `${items.length} Vorräte gelistet`;
+
   if (items.length === 0) {
     listEl.innerHTML = `
       <div class="empty-state">
@@ -1725,7 +1761,7 @@ function renderPantry() {
     const cat = it.pantryCat || PANTRY_CATEGORIES.household;
 
     return `
-      <div class="pantry-card">
+      <div class="pantry-card" onclick="openPantryDetailModal('${it.normKey}')">
         <div class="pantry-left">
           <div class="pantry-icon">${cat.icon}</div>
           <div class="pantry-info">
@@ -1734,14 +1770,143 @@ function renderPantry() {
           </div>
         </div>
         <div class="pantry-right">
-          <div class="pantry-time-ago">${timeAgoStr}</div>
-          <div class="pantry-meta">am ${datePretty}</div>
-          <div class="pantry-meta">von <strong>${escapeHtml(it.paidBy || 'WG')}</strong></div>
+          <div class="pantry-right-text">
+            <div class="pantry-time-ago">${timeAgoStr}</div>
+            <div class="pantry-meta">am ${datePretty}</div>
+            <div class="pantry-meta">von <strong>${escapeHtml(it.paidBy || 'WG')}</strong></div>
+          </div>
+          <span class="pantry-chevron">›</span>
         </div>
       </div>
     `;
   }).join('');
 }
+
+function closePantryDetailModal() {
+  const modal = document.getElementById('pantryDetailModal');
+  if (modal) modal.classList.remove('open');
+}
+
+/**
+ * 1-Tap Drilldown & Detailanalyse für ein einzelnes Pantry-Produkt (Option A)
+ */
+window.openPantryDetailModal = (normKey) => {
+  if (!normKey) return;
+  const modal = document.getElementById('pantryDetailModal');
+  const titleEl = document.getElementById('pantryModalTitle');
+  const iconEl = document.getElementById('pantryModalIcon');
+  const bodyEl = document.getElementById('pantryModalBody');
+
+  // Alle historischen Einkäufe dieses Artikels finden
+  const matchingPurchases = appState.items
+    .filter(it => {
+      const cls = classifyPantryItem(it);
+      if (!cls) return false;
+      const key = it.name.toLowerCase()
+        .replace(/(\d+ml|\d+g|\d+kg|\d+er|\d+l)/gi, '')
+        .replace(/[^a-z0-9äöüß]/gi, '')
+        .trim();
+      return key === normKey;
+    })
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  if (matchingPurchases.length === 0) return;
+
+  const latest = matchingPurchases[0];
+  const cat = classifyPantryItem(latest) || PANTRY_CATEGORIES.household;
+
+  if (titleEl) titleEl.textContent = latest.name;
+  if (iconEl) iconEl.textContent = cat.icon;
+
+  // KPIs berechnen
+  let totalSpent = 0;
+  let minPrice = Infinity;
+  let maxPrice = -Infinity;
+  const buyerCounts = {};
+
+  matchingPurchases.forEach(p => {
+    const pr = Number(p.price) || 0;
+    totalSpent += pr;
+    if (pr > 0 && pr < minPrice) minPrice = pr;
+    if (pr > maxPrice) maxPrice = pr;
+    const b = p.paidBy || 'WG';
+    buyerCounts[b] = (buyerCounts[b] || 0) + 1;
+  });
+
+  const count = matchingPurchases.length;
+  const avgPrice = count > 0 ? (totalSpent / count) : 0;
+  if (minPrice === Infinity) minPrice = avgPrice;
+  if (maxPrice === -Infinity) maxPrice = avgPrice;
+
+  // Kauf-Rhythmus berechnen (falls >= 2 Einkäufe vorhanden)
+  let rhythmStr = `Zuletzt ${getTimeAgo(latest.date)}`;
+  if (count >= 2) {
+    const oldest = matchingPurchases[count - 1];
+    const dNew = new Date(latest.date || 0);
+    const dOld = new Date(oldest.date || 0);
+    const totalDays = Math.max(1, Math.round((dNew - dOld) / (1000 * 60 * 60 * 24)));
+    const avgDays = Math.round(totalDays / (count - 1));
+    rhythmStr = `alle ~${avgDays} Tage`;
+  }
+
+  // Buyer Aufteilung
+  const buyerSummaryStr = Object.keys(buyerCounts)
+    .map(name => `${name} (${buyerCounts[name]}x)`)
+    .join(' • ');
+
+  bodyEl.innerHTML = `
+    <!-- KPI 2x2 Grid -->
+    <div class="pantry-modal-grid">
+      <div class="pantry-kpi-card">
+        <div class="pantry-kpi-title">Gesamtausgaben</div>
+        <div class="pantry-kpi-value">${formatEuro(totalSpent)}</div>
+        <div class="pantry-kpi-sub">${count}x gekauft</div>
+      </div>
+      <div class="pantry-kpi-card">
+        <div class="pantry-kpi-title">Ø Preis pro Stück</div>
+        <div class="pantry-kpi-value">${formatEuro(avgPrice)}</div>
+        <div class="pantry-kpi-sub">${minPrice < maxPrice ? `${formatEuro(minPrice)} - ${formatEuro(maxPrice)}` : 'konstant'}</div>
+      </div>
+      <div class="pantry-kpi-card">
+        <div class="pantry-kpi-title">Kauf-Rhythmus</div>
+        <div class="pantry-kpi-value" style="font-size: 15px;">${rhythmStr}</div>
+        <div class="pantry-kpi-sub">Verbrauchstempo</div>
+      </div>
+      <div class="pantry-kpi-card">
+        <div class="pantry-kpi-title">Wer hat bezahlt?</div>
+        <div class="pantry-kpi-value" style="font-size: 14px;">${escapeHtml(buyerSummaryStr || 'WG')}</div>
+        <div class="pantry-kpi-sub">Käufe pro Mitbewohner</div>
+      </div>
+    </div>
+
+    <!-- Purchase History List -->
+    <div class="pantry-history-section-title">
+      <span>Kauf-Historie (${count})</span>
+      <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">Neueste zuerst</span>
+    </div>
+
+    <div class="pantry-history-list">
+      ${matchingPurchases.map(p => {
+        const timeAgo = getTimeAgo(p.date);
+        const datePretty = formatDatePretty(p.date);
+        return `
+          <div class="pantry-history-row">
+            <div class="pantry-history-left">
+              <div class="pantry-history-date">${datePretty} (${timeAgo})</div>
+              <div class="pantry-history-store">🏪 ${escapeHtml(p.store || 'Supermarkt')}</div>
+            </div>
+            <div class="pantry-history-right">
+              <div class="pantry-history-price">${formatEuro(p.price)}</div>
+              <div class="pantry-history-payer">von ${escapeHtml(p.paidBy || 'WG')}</div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  modal.classList.add('open');
+};
 
 // Kompatibilitäts-Alias
 function renderRecentItems() {

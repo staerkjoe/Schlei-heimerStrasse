@@ -19,7 +19,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/app.css?v=4">
 
   <!-- Chart.js for Statistics -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -334,6 +334,18 @@
         <button class="chip" data-filter="utensils">🔪 Utensilien</button>
       </div>
 
+      <!-- Dynamic Category Summary KPI Banner -->
+      <div class="pantry-summary-bar" id="pantrySummaryBar">
+        <div class="summary-left">
+          <span class="summary-icon" id="summaryIcon">🥫</span>
+          <span class="summary-label" id="summaryLabel">Alle Vorräte</span>
+        </div>
+        <div class="summary-stats">
+          <span class="summary-stat-value" id="summaryTotalSpent">0,00 €</span>
+          <span class="summary-stat-sub" id="summaryItemCount">0 Vorräte</span>
+        </div>
+      </div>
+
       <!-- Items Grid / List -->
       <div class="items-grid" id="itemsList">
         <div class="empty-state">
@@ -576,11 +588,33 @@
     </div>
   </div>
 
+  <!-- ==========================================
+       MODAL 5: PANTRY ARTIKEL-DRILLDOWN & HISTORIE
+       ========================================== -->
+  <div class="modal-overlay" id="pantryDetailModal">
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="pantryModalIcon" style="font-size: 20px;">🫒</span>
+          <span class="sheet-title" id="pantryModalTitle">Artikel-Details</span>
+        </div>
+        <button class="btn-icon" id="btnClosePantryDetail">✕</button>
+      </div>
+      <div class="sheet-body" id="pantryModalBody">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-primary" id="btnDonePantryDetail" style="width: 100%;">Fertig</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div class="toast" id="toast"></div>
 
   <!-- Main JavaScript Application -->
-  <script src="js/app.js"></script>
+  <script src="js/app.js?v=4"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>

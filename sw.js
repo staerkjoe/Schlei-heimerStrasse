@@ -3,7 +3,7 @@
  * Ermöglicht schnelles Laden und Offline-PWA-Support
  */
 
-const CACHE_NAME = 'wg-kasse-v3';
+const CACHE_NAME = 'wg-kasse-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
