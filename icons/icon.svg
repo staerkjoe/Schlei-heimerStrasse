@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="50%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="card-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F1F5F9"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  
+  <!-- Rounded iOS App Background -->
+  <rect width="512" height="512" rx="115" fill="url(#bg-grad)"/>
+
+  <!-- Receipt Graphic with Shadow -->
+  <g filter="url(#shadow)">
+    <!-- Main Receipt Paper -->
+    <path d="M 140 100 
+             L 372 100 
+             L 372 385 
+             L 343 370 
+             L 314 385 
+             L 285 370 
+             L 256 385 
+             L 227 370 
+             L 198 385 
+             L 169 370 
+             L 140 385 Z" 
+          fill="url(#card-grad)" />
+
+    <!-- Receipt Header Lines -->
+    <rect x="180" y="145" width="152" height="18" rx="9" fill="#2563EB" opacity="0.9"/>
+    <rect x="200" y="175" width="112" height="10" rx="5" fill="#94A3B8"/>
+
+    <!-- Receipt Items Dashed/Dotted Line -->
+    <line x1="170" y1="210" x2="342" y2="210" stroke="#CBD5E1" stroke-width="3" stroke-dasharray="6,6"/>
+
+    <!-- Receipt Items -->
+    <rect x="175" y="235" width="90" height="12" rx="6" fill="#64748B"/>
+    <rect x="295" y="235" width="42" height="12" rx="6" fill="#334155"/>
+
+    <rect x="175" y="265" width="110" height="12" rx="6" fill="#64748B"/>
+    <rect x="295" y="265" width="42" height="12" rx="6" fill="#334155"/>
+
+    <rect x="175" y="295" width="75" height="12" rx="6" fill="#64748B"/>
+    <rect x="295" y="295" width="42" height="12" rx="6" fill="#334155"/>
+
+    <!-- Divider -->
+    <line x1="170" y1="325" x2="342" y2="325" stroke="#CBD5E1" stroke-width="3"/>
+
+    <!-- Total Badge -->
+    <circle cx="340" cy="340" r="48" fill="#10B981" filter="url(#shadow)"/>
+    <text x="340" y="356" font-family="-apple-system, system-ui, sans-serif" font-size="44" font-weight="900" fill="#FFFFFF" text-anchor="middle">€</text>
+  </g>
+</svg>

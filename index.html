@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>WG-Kasse Schleißheimer Straße</title>
+  
+  <!-- Mobile & PWA Viewport -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#090D14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="WG-Kasse">
+  <meta name="description" content="Smarte WG-Kasse mit automatischer Kassenbon-Erkennung per Gemini KI">
+
+  <!-- Icons & Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/app.css">
+
+  <!-- Chart.js for Statistics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- Top App Bar -->
+  <header class="app-header">
+    <div class="brand-wrapper">
+      <div class="brand-icon">🧾</div>
+      <div class="brand-info">
+        <h1>WG-Kasse</h1>
+        <div class="tagline">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Schleißheimer Str.</span>
+        </div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="user-badge" id="activeUserBadge" title="Aktiven Nutzer wechseln">
+        <span>👤</span>
+        <span id="activeUserName">Johannes</span>
+      </button>
+      <button class="btn-icon" id="openSettingsBtn" title="Einstellungen">⚙️</button>
+    </div>
+  </header>
+
+  <!-- Demo Mode Banner (shown when demo data is active) -->
+  <div class="demo-banner" id="demoBanner" style="display: none;">
+    <div>💡 <strong>Demo-Modus aktiv:</strong> Du siehst Beispieldaten.</div>
+    <button id="demoBannerBtn">Einstellungen</button>
+  </div>
+
+  <!-- Main Views Container -->
+  <main class="app-content">
+
+    <!-- ==========================================
+         TAB 1: SALDO & AUSGABEN (HOME)
+         ========================================== -->
+    <section class="tab-view active" id="tab-saldo">
+      
+      <!-- Live Saldo Hero Card -->
+      <div class="saldo-card">
+        <div class="saldo-header">
+          <span class="saldo-label">Aktueller WG-Saldo</span>
+          <span class="saldo-badge" id="saldoBadge">Live</span>
+        </div>
+        <div class="saldo-amount-wrap">
+          <div class="saldo-amount" id="saldoAmount">0,00 €</div>
+          <div class="saldo-subtext" id="saldoSubtext">Berechne Saldo...</div>
+        </div>
+
+        <div class="saldo-stats-row">
+          <div class="saldo-stat-item">
+            <div class="stat-label">Diesen Monat gesamt</div>
+            <div class="stat-value" id="monthlyTotalStat">0,00 €</div>
+          </div>
+          <div class="saldo-stat-item">
+            <div class="stat-label">Dein Konsum-Anteil</div>
+            <div class="stat-value" id="monthlyMyShareStat">0,00 €</div>
+          </div>
+        </div>
+
+        <button class="btn-primary btn-settle" id="btnOpenSettle">
+          <span>🤝</span>
+          <span>Schulden begleichen (Settle Up)</span>
+        </button>
+      </div>
+
+      <!-- Recent Transactions Section -->
+      <div class="section-header">
+        <h2 class="section-title">Letzte Aktivitäten</h2>
+        <span class="section-badge" id="txnCountBadge">0 Einträge</span>
+      </div>
+
+      <div class="transaction-list" id="transactionList">
+        <!-- Rendered dynamically -->
+        <div class="empty-state">
+          <div class="empty-icon">⏳</div>
+          <p>Lade Transaktionen...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         TAB 2: ERFASSEN (BON / TEXT / MANUELL)
+         ========================================== -->
+    <section class="tab-view" id="tab-erfassen">
+      
+      <!-- Segmented Switcher for Input Mode -->
+      <div class="segmented-control">
+        <button class="segment-btn active" data-mode="camera">📸 Bon-Scan</button>
+        <button class="segment-btn" data-mode="text">✍️ KI-Freitext</button>
+        <button class="segment-btn" data-mode="manual">📝 Manuell</button>
+      </div>
+
+      <!-- Mode 1: Camera / Receipt Scan -->
+      <div class="capture-card" id="mode-camera">
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+        <input type="file" id="galleryInput" accept="image/*" style="display:none">
+
+        <div class="drop-zone" id="dropZone">
+          <div class="drop-zone-icon">📷</div>
+          <h3>Kassenbon oder Rechnung</h3>
+          <p>Tippe hier für Foto mit Kamera oder wähle ein Bild aus der Galerie</p>
+          <div style="display: flex; gap: 10px; justify-content: center; margin-top: 14px;">
+            <button class="btn-secondary" id="btnTriggerCamera" style="width: auto; padding: 8px 14px; font-size: 13px;">
+              📸 Kamera öffnen
+            </button>
+            <button class="btn-secondary" id="btnTriggerGallery" style="width: auto; padding: 8px 14px; font-size: 13px;">
+              🖼️ Galerie
+            </button>
+          </div>
+        </div>
+
+        <div class="preview-container" id="previewContainer" style="display: none;">
+          <img id="receiptPreviewImg" class="preview-img" alt="Bon Vorschau">
+          <button class="btn-remove-preview" id="btnRemovePreview" title="Entfernen">✕</button>
+          <div class="preview-badge" id="compressionBadge">Komprimiert: ~250 KB</div>
+        </div>
+
+        <div style="margin-top: 16px;">
+          <button class="btn-primary" id="btnAnalyzeReceipt" disabled>
+            <span>✨</span>
+            <span id="analyzeBtnText">Kassenbon mit KI analysieren</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mode 2: Natural Language Text -->
+      <div class="capture-card" id="mode-text" style="display: none;">
+        <div class="form-group">
+          <label class="form-label" for="freeTextInput">Ausgabe in natürlicher Sprache beschreiben</label>
+          <textarea class="textarea-text" id="freeTextInput" placeholder="z. B. 45€ Thai Restaurant gestern, Johannes hat gezahlt, 50/50"></textarea>
+        </div>
+
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Schnellvorlagen:</div>
+        <div class="chips-container" id="textChips">
+          <button class="chip" data-text="45€ Thai Restaurant gestern, Johannes hat gezahlt, 50/50">🍜 45€ Thai gestern, 50/50</button>
+          <button class="chip" data-text="Bier & Snacks 18,50 bei Späti, 50/50">🍻 18,50€ Späti Bier & Snacks</button>
+          <button class="chip" data-text="64,20€ Rewe Wocheneinkauf heute, Johannes, 50/50">🛒 64,20€ Rewe Einkauf</button>
+          <button class="chip" data-text="14,80€ dm Drogerie: Klopapier & Spülitabs, 50/50">🧴 14,80€ dm Klopapier & Tabs</button>
+        </div>
+
+        <button class="btn-primary" id="btnAnalyzeText">
+          <span>✨</span>
+          <span id="analyzeTextBtnText">Mit Gemini erfassen</span>
+        </button>
+      </div>
+
+      <!-- Mode 3: Manual Direct Entry -->
+      <div class="capture-card" id="mode-manual" style="display: none;">
+        <div class="form-group">
+          <label class="form-label" for="manualTitle">Titel / Laden</label>
+          <input type="text" class="input-text" id="manualTitle" placeholder="z. B. Rewe Einkauf, Stromrechnung...">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label" for="manualAmount">Betrag (€)</label>
+            <input type="number" step="0.01" class="input-text" id="manualAmount" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="manualDate">Datum</label>
+            <input type="date" class="input-text" id="manualDate">
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label" for="manualCategory">Kategorie</label>
+            <select class="select-input" id="manualCategory">
+              <option value="Lebensmittel">🛒 Lebensmittel</option>
+              <option value="Restaurant/Café">🍽️ Restaurant/Café</option>
+              <option value="Haushalt/Drogerie">🧴 Haushalt/Drogerie</option>
+              <option value="Freizeit/Bar">🍻 Freizeit/Bar</option>
+              <option value="Sonstiges">📦 Sonstiges</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="manualPayer">Zahler</label>
+            <select class="select-input" id="manualPayer"></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="manualSplit">Aufteilung</label>
+          <select class="select-input" id="manualSplit">
+            <option value="50_50">50 / 50 (Halbe-Halbe)</option>
+            <option value="100_USER_A">100% Zahler</option>
+            <option value="100_USER_B">100% Mitbewohner</option>
+          </select>
+        </div>
+        <button class="btn-primary" id="btnSaveManual">
+          <span>💾</span>
+          <span>Transaktion speichern</span>
+        </button>
+      </div>
+
+    </section>
+
+    <!-- ==========================================
+         TAB 3: ANALYSE & KI-CHATBOT
+         ========================================== -->
+    <section class="tab-view" id="tab-analyse">
+      
+      <!-- Timeframe Filter -->
+      <div class="segmented-control" id="timeframeFilter">
+        <button class="segment-btn active" data-range="this_month">Dieser Monat</button>
+        <button class="segment-btn" data-range="last_month">Letzter Monat</button>
+        <button class="segment-btn" data-range="ytd">Jahr (YTD)</button>
+        <button class="segment-btn" data-range="all">Gesamt</button>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="title">WG-Konsumausgaben</div>
+          <div class="number" id="statsTotalExpenses">0,00 €</div>
+          <div class="sub">Reine Ausgaben (ohne Settle)</div>
+        </div>
+        <div class="stat-box">
+          <div class="title">Monatsdurchschnitt</div>
+          <div class="number" id="statsMonthlyAvg">0,00 €</div>
+          <div class="sub" id="statsPeriodCount">über 1 Monat</div>
+        </div>
+        <div class="stat-box">
+          <div class="title" id="statUserALabel">Johannes</div>
+          <div class="number" id="statUserAAmount">0,00 €</div>
+          <div class="sub">ausgelegt</div>
+        </div>
+        <div class="stat-box">
+          <div class="title" id="statUserBLabel">Mitbewohner</div>
+          <div class="number" id="statUserBAmount">0,00 €</div>
+          <div class="sub">ausgelegt</div>
+        </div>
+      </div>
+
+      <!-- Chart 1: Categories Doughnut -->
+      <div class="chart-card">
+        <h3>
+          <span>Kategorien-Verteilung</span>
+          <span style="font-size: 12px; color: var(--text-muted); font-weight: normal;">Konsum</span>
+        </h3>
+        <div class="chart-wrapper">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Monthly Trend -->
+      <div class="chart-card">
+        <h3>
+          <span>Monatsverlauf</span>
+          <span style="font-size: 12px; color: var(--text-muted); font-weight: normal;">Trend</span>
+        </h3>
+        <div class="chart-wrapper">
+          <canvas id="monthlyTrendChart"></canvas>
+        </div>
+      </div>
+
+      <!-- AI Chatbot ("Frag die WG-Kasse") -->
+      <div class="chatbot-card">
+        <div class="chatbot-header">
+          <div class="chatbot-avatar">🤖</div>
+          <div class="chatbot-title">
+            <h4>Frag die WG-Kasse</h4>
+            <p>Gemini beantwortet Fragen zu Einkäufen, Summen & Basics</p>
+          </div>
+        </div>
+
+        <div class="chips-container" id="botChips" style="margin-bottom: 10px;">
+          <button class="chip" data-prompt="Wie viel haben wir dieses Jahr für Olivenöl ausgegeben?">🫒 Olivenöl-Kosten?</button>
+          <button class="chip" data-prompt="Was waren unsere 3 teuersten Restaurantbesuche?">🍽️ Top 3 Restaurants?</button>
+          <button class="chip" data-prompt="Wie viel haben wir letzten Monat für Lebensmittel ausgegeben?">🛒 Lebensmittel letzten Monat?</button>
+          <button class="chip" data-prompt="Wer hat bisher insgesamt mehr Geld ausgelegt?">⚖️ Wer hat mehr gezahlt?</button>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-bubble assistant">
+            Hi! Ich bin euer WG-Finanz-Bot. Frag mich einfach alles zu euren Einkäufen, Kassenbons oder Posten wie z. B. <em>"Wann haben wir zuletzt Kaffee gekauft?"</em> oder nutze die Buttons oben! ☕
+          </div>
+        </div>
+
+        <div class="chat-input-row">
+          <input type="text" class="chat-input" id="chatInput" placeholder="Frage an die WG-Kasse stellen...">
+          <button class="chat-send-btn" id="btnSendChat" title="Senden">➤</button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==========================================
+         TAB 4: ZULETZT GEKAUFT (WG-BASICS)
+         ========================================== -->
+    <section class="tab-view" id="tab-zuletzt">
+      
+      <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 14px; font-size: 12px; color: #BFDBFE;">
+        💡 <strong>Passiver Kaufverlauf:</strong> Erfahre direkt im Supermarkt, wann WG-Basics zuletzt besorgt wurden und zu welchem Preis. Kein Zählen nötig!
+      </div>
+
+      <!-- Search Input -->
+      <div class="search-bar-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="itemSearchInput" placeholder="Artikel suchen (z. B. Olivenöl, Klopapier, Kaffee)...">
+      </div>
+
+      <!-- Quick Filter Chips for WG Basics -->
+      <div class="chips-container" id="basicChips">
+        <button class="chip active" data-filter="">Alle Artikel</button>
+        <button class="chip" data-filter="olivenöl">🫒 Olivenöl</button>
+        <button class="chip" data-filter="toilettenpapier">🧻 Toilettenpapier</button>
+        <button class="chip" data-filter="kaffee">☕ Kaffee</button>
+        <button class="chip" data-filter="tabs">🧼 Spülitabs</button>
+        <button class="chip" data-filter="balsamico">🥗 Balsamico</button>
+        <button class="chip" data-filter="müllbeutel">🗑️ Müllbeutel</button>
+        <button class="chip" data-filter="hafermilch">🥛 Hafermilch</button>
+      </div>
+
+      <!-- Items Grid / List -->
+      <div class="items-grid" id="itemsList">
+        <div class="empty-state">
+          <div class="empty-icon">🕒</div>
+          <p>Lade gekaufte Artikel...</p>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ==========================================
+       BOTTOM TAB NAVIGATION
+       ========================================== -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-tab="tab-saldo">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">Saldo</span>
+    </button>
+    <button class="nav-item" data-tab="tab-erfassen">
+      <span class="nav-icon">➕</span>
+      <span class="nav-label">Erfassen</span>
+    </button>
+    <button class="nav-item" data-tab="tab-analyse">
+      <span class="nav-icon">📊</span>
+      <span class="nav-label">Analyse</span>
+    </button>
+    <button class="nav-item" data-tab="tab-zuletzt">
+      <span class="nav-icon">🕒</span>
+      <span class="nav-label">Zuletzt</span>
+    </button>
+  </nav>
+
+  <!-- ==========================================
+       MODAL 1: INTERACTIVE REVIEW-EDITOR
+       ========================================== -->
+  <div class="modal-overlay" id="reviewModal">
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title">🧾 Beleg überprüfen & speichern</div>
+        <button class="btn-icon" id="btnCloseReview">✕</button>
+      </div>
+      <div class="sheet-body">
+        <div class="form-group">
+          <label class="form-label" for="reviewMerchant">Laden / Händler</label>
+          <input type="text" class="input-text" id="reviewMerchant">
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label" for="reviewTotal">Gesamtbetrag (€)</label>
+            <input type="number" step="0.01" class="input-text" id="reviewTotal">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reviewDate">Datum</label>
+            <input type="date" class="input-text" id="reviewDate">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label" for="reviewCategory">Kategorie</label>
+            <select class="select-input" id="reviewCategory">
+              <option value="Lebensmittel">🛒 Lebensmittel</option>
+              <option value="Restaurant/Café">🍽️ Restaurant/Café</option>
+              <option value="Haushalt/Drogerie">🧴 Haushalt/Drogerie</option>
+              <option value="Freizeit/Bar">🍻 Freizeit/Bar</option>
+              <option value="Sonstiges">📦 Sonstiges</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reviewPayer">Zahler</label>
+            <select class="select-input" id="reviewPayer"></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reviewSplit">Aufteilung</label>
+          <select class="select-input" id="reviewSplit">
+            <option value="50_50">50 / 50 (Halbe-Halbe)</option>
+            <option value="100_USER_A">100% Zahler</option>
+            <option value="100_USER_B">100% Mitbewohner</option>
+          </select>
+        </div>
+
+        <!-- Itemized Items List -->
+        <div style="margin-top: 16px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <label class="form-label" style="margin-bottom: 0;">Erkannte Einzelpositionen</label>
+            <button id="btnAddReviewItem" style="background: none; border: none; color: var(--accent-blue); font-size: 13px; font-weight: 600; cursor: pointer;">
+              + Posten hinzufügen
+            </button>
+          </div>
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Artikel</th>
+                <th style="width: 70px;">Preis €</th>
+                <th style="width: 30px;"></th>
+              </tr>
+            </thead>
+            <tbody id="reviewItemsTbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-secondary" id="btnCancelReview" style="flex: 1;">Abbrechen</button>
+        <button class="btn-primary" id="btnConfirmSaveReview" style="flex: 2;">Transaktion speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL 2: SETTLE UP (SCHULDEN BEGLEICHEN)
+       ========================================== -->
+  <div class="modal-overlay" id="settleModal">
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title">🤝 Schulden begleichen</div>
+        <button class="btn-icon" id="btnCloseSettle">✕</button>
+      </div>
+      <div class="sheet-body">
+        <div style="background: var(--accent-green-bg); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px; text-align: center;">
+          <div style="font-size: 13px; color: #A7F3D0; margin-bottom: 4px;" id="settleDescription">Wer zahlt an wen?</div>
+          <div style="font-size: 28px; font-weight: 800; color: #FFFFFF;" id="settleSuggestedAmount">0,00 €</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="settlePayer">Zahler (wer gleicht aus?)</label>
+          <select class="select-input" id="settlePayer"></select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="settleAmount">Ausgleichsbetrag (€)</label>
+          <input type="number" step="0.01" class="input-text" id="settleAmount">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="settleDate">Datum</label>
+          <input type="date" class="input-text" id="settleDate">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="settleNote">Notiz</label>
+          <input type="text" class="input-text" id="settleNote" value="Ausgleich via PayPal / Bar">
+        </div>
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-secondary" id="btnCancelSettle" style="flex: 1;">Abbrechen</button>
+        <button class="btn-primary btn-settle" id="btnConfirmSettle" style="flex: 2;">Ausgleich buchen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL 3: TRANSACTION DETAIL & DELETE
+       ========================================== -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title" id="detailTitle">Transaktionsdetails</div>
+        <button class="btn-icon" id="btnCloseDetail">✕</button>
+      </div>
+      <div class="sheet-body" id="detailBody">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-secondary" id="btnDeleteTxn" style="color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.3);">
+          🗑️ Transaktion löschen
+        </button>
+        <button class="btn-primary" id="btnDoneDetail">Fertig</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL 4: SETTINGS & SETUP FLOW
+       ========================================== -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title">⚙️ Einstellungen & Setup</div>
+        <button class="btn-icon" id="btnCloseSettings">✕</button>
+      </div>
+      <div class="sheet-body">
+        
+        <div class="form-group">
+          <label class="form-label" for="settingAppUrl">Google Apps Script Web-App-URL</label>
+          <input type="url" class="input-text" id="settingAppUrl" placeholder="https://script.google.com/macros/s/.../exec">
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+            Aus Schritt 3 des Setup-Guides (Google Sheets ➔ Apps Script ➔ Bereitstellen).
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="settingSecret">WG-Passwort (SECRET_TOKEN)</label>
+          <input type="password" class="input-text" id="settingSecret" placeholder="z. B. schleissheimer2026">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label" for="settingUserA">Mitbewohner 1</label>
+            <input type="text" class="input-text" id="settingUserA" value="Johannes">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="settingUserB">Mitbewohner 2</label>
+            <input type="text" class="input-text" id="settingUserB" value="Mitbewohner">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="settingActiveUser">Aktiver Nutzer auf diesem Gerät</label>
+          <select class="select-input" id="settingActiveUser"></select>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border-subtle); margin: 16px 0;">
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+          <div>
+            <div style="font-size: 14px; font-weight: 600;">Demo-Modus</div>
+            <div style="font-size: 12px; color: var(--text-muted);">App sofort mit Beispieldaten testen</div>
+          </div>
+          <input type="checkbox" id="settingDemoToggle" style="transform: scale(1.4); cursor: pointer;">
+        </div>
+
+        <button class="btn-secondary" id="btnTestConnection" style="margin-bottom: 8px;">
+          🔄 Verbindung testen & synchronisieren
+        </button>
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-primary" id="btnSaveSettings">Einstellungen speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Main JavaScript Application -->
+  <script src="js/app.js"></script>
+
+  <!-- PWA Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+          console.warn('SW registration failed:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
