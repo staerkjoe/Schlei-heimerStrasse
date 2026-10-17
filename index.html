@@ -309,37 +309,36 @@
     </section>
 
     <!-- ==========================================
-         TAB 4: ZULETZT GEKAUFT (WG-BASICS)
+         TAB 4: WG-PANTRY (VORRÄTE & BASICS)
          ========================================== -->
     <section class="tab-view" id="tab-zuletzt">
       
       <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 14px; font-size: 12px; color: #BFDBFE;">
-        💡 <strong>Passiver Kaufverlauf:</strong> Erfahre direkt im Supermarkt, wann WG-Basics zuletzt besorgt wurden und zu welchem Preis. Kein Zählen nötig!
+        💡 <strong>WG-Pantry:</strong> Zeigt ausschließlich langlebige Vorräte & Grundausstattung – ohne flüchtige Kochzutaten (wie Kürbis, Fleisch etc.) und ohne Preise.
       </div>
 
       <!-- Search Input -->
       <div class="search-bar-wrap">
         <span class="search-icon">🔍</span>
-        <input type="text" class="search-input" id="itemSearchInput" placeholder="Artikel suchen (z. B. Olivenöl, Klopapier, Kaffee)...">
+        <input type="text" class="search-input" id="itemSearchInput" placeholder="Pantry durchsuchen (z. B. Senf, Backpapier, Olivenöl)...">
       </div>
 
-      <!-- Quick Filter Chips for WG Basics -->
+      <!-- Quick Filter Chips for WG Basics Categories -->
       <div class="chips-container" id="basicChips">
-        <button class="chip active" data-filter="">Alle Artikel</button>
-        <button class="chip" data-filter="olivenöl">🫒 Olivenöl</button>
-        <button class="chip" data-filter="toilettenpapier">🧻 Toilettenpapier</button>
-        <button class="chip" data-filter="kaffee">☕ Kaffee</button>
-        <button class="chip" data-filter="tabs">🧼 Spülitabs</button>
-        <button class="chip" data-filter="balsamico">🥗 Balsamico</button>
-        <button class="chip" data-filter="müllbeutel">🗑️ Müllbeutel</button>
-        <button class="chip" data-filter="hafermilch">🥛 Hafermilch</button>
+        <button class="chip active" data-filter="all">Alle Vorräte</button>
+        <button class="chip" data-filter="oil_vinegar">🫒 Öl & Essig</button>
+        <button class="chip" data-filter="spices">🧂 Gewürze</button>
+        <button class="chip" data-filter="condiments">🥫 Kondimente</button>
+        <button class="chip" data-filter="cleaning">🧼 Putzmittel</button>
+        <button class="chip" data-filter="household">🧻 Haushalt</button>
+        <button class="chip" data-filter="utensils">🔪 Utensilien</button>
       </div>
 
       <!-- Items Grid / List -->
       <div class="items-grid" id="itemsList">
         <div class="empty-state">
-          <div class="empty-icon">🕒</div>
-          <p>Lade gekaufte Artikel...</p>
+          <div class="empty-icon">🥫</div>
+          <p>Lade WG-Pantry...</p>
         </div>
       </div>
 
@@ -364,8 +363,8 @@
       <span class="nav-label">Analyse</span>
     </button>
     <button class="nav-item" data-tab="tab-zuletzt">
-      <span class="nav-icon">🕒</span>
-      <span class="nav-label">Zuletzt</span>
+      <span class="nav-icon">🥫</span>
+      <span class="nav-label">Pantry</span>
     </button>
   </nav>
 

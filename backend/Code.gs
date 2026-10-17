@@ -284,20 +284,24 @@ JSON Schema:
       "name": "Präziser Produktname auf Deutsch (z.B. Olivenöl Extra Vergine, Bio-Hafermilch, Toilettenpapier)",
       "quantity": 1,
       "price": 0.00,
-      "category": "Lebensmittel, Haushalt/Drogerie, etc."
+      "category": "Lebensmittel, Haushalt/Drogerie, etc.",
+      "pantryCategory": "Öl & Essig" | "Gewürze" | "Kondimente" | "Putzmittel" | "Haushalt" | "Küchenutensilien" | null
     }
   ]
 }
 
 Regeln:
 1. Erkenne Einzelartikel so genau wie möglich mit Einzelpreis.
-2. Wenn die Summe der Einzelartikel leicht vom Gesamtbetrag abweicht (z.B. wegen Pfand oder Rabatt), setze "totalAmount" auf die echte Gesamtsumme des Bons.
-3. Bei Restaurantrechnungen: Erkenne Trinkgeld falls vorhanden oder die Gesamtsumme.
-4. Bei Freitext (z.B. "45€ Thai Restaurant gestern, Johannes hat gezahlt, 50/50"):
+2. WG-Pantry-Zuordnung ("pantryCategory"):
+   - Setze "pantryCategory" NUR auf eine der 6 Kategorien ("Öl & Essig", "Gewürze", "Kondimente", "Putzmittel", "Haushalt", "Küchenutensilien"), wenn es sich um langlebige Grundausstattung oder haltbare Vorräte handelt (z.B. Olivenöl, Balsamico, Pfeffer, Salz, Senf, Ketchup, Spülitabs, Müllbeutel, Backpapier, Messer).
+   - Bei kurzlebigen Kochzutaten, Frischeprodukten (wie Kürbis, Zucchini, Fleisch, Gemüse, Obst, Milch, Nudeln, Brot) oder Snacks MUSS "pantryCategory" null sein!
+3. Wenn die Summe der Einzelartikel leicht vom Gesamtbetrag abweicht (z.B. wegen Pfand oder Rabatt), setze "totalAmount" auf die echte Gesamtsumme des Bons.
+4. Bei Restaurantrechnungen: Erkenne Trinkgeld falls vorhanden oder die Gesamtsumme.
+5. Bei Freitext (z.B. "45€ Thai Restaurant gestern, Johannes hat gezahlt, 50/50"):
    - Verstehe relative Datumsangaben (gestern, vorgestern).
    - Ordne den Zahler "${userA}" oder "${userB}" zu.
    - Falls keine Einzelartikel genannt sind, erstelle einen Eintrag in "items" mit der Gesamtsumme.
-5. Antworte NUR im reinen JSON-Format ohne Markdown-Backticks (\`\`\`json).`;
+6. Antworte NUR im reinen JSON-Format ohne Markdown-Backticks (\`\`\`json).`;
 
   let geminiParts = [];
 
@@ -555,11 +559,11 @@ function callGeminiApi(contents, generationConfig, scriptProps) {
     throw new Error('GEMINI_API_KEY fehlt in den Script Properties.');
   }
 
-  // Modell aus Skripteigenschaft oder bewährte Fallbacks
+  // Konfiguriertes Modell oder Fallbacks (bevorzugt gemini-3.8-flash)
   const customModel = scriptProps.getProperty('GEMINI_MODEL');
   const candidateModels = customModel 
-    ? [customModel, 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash'] 
-    : ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash'];
+    ? [customModel, 'gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'] 
+    : ['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 
   let lastError = null;
 

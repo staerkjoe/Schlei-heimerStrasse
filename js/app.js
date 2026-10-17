@@ -101,7 +101,7 @@ const MOCK_DATA = {
       quantity: 1,
       price: 6.99,
       assignedTo: 'GEMEINSAM',
-      category: 'Lebensmittel',
+      category: 'Öl & Essig',
       date: getRelativeDateStr(0),
       paidBy: 'Johannes',
       store: 'Rewe City Schwabing'
@@ -109,11 +109,11 @@ const MOCK_DATA = {
     {
       id: 'item_mock_2',
       transactionId: 'txn_mock_1',
-      name: 'Bio-Hafermilch Barista 1L',
-      quantity: 2,
-      price: 4.38,
+      name: 'Hokkaido-Kürbis für Suppe',
+      quantity: 1,
+      price: 2.49,
       assignedTo: 'GEMEINSAM',
-      category: 'Lebensmittel',
+      category: 'Lebensmittel', // Frischeware -> wird in Pantry gefiltert!
       date: getRelativeDateStr(0),
       paidBy: 'Johannes',
       store: 'Rewe City Schwabing'
@@ -125,7 +125,7 @@ const MOCK_DATA = {
       quantity: 1,
       price: 3.95,
       assignedTo: 'GEMEINSAM',
-      category: 'Haushalt/Drogerie',
+      category: 'Haushalt',
       date: getRelativeDateStr(-2),
       paidBy: 'Mitbewohner',
       store: 'dm Drogeriemarkt'
@@ -137,7 +137,7 @@ const MOCK_DATA = {
       quantity: 1,
       price: 5.45,
       assignedTo: 'GEMEINSAM',
-      category: 'Haushalt/Drogerie',
+      category: 'Putzmittel',
       date: getRelativeDateStr(-2),
       paidBy: 'Mitbewohner',
       store: 'dm Drogeriemarkt'
@@ -149,7 +149,7 @@ const MOCK_DATA = {
       quantity: 1,
       price: 1.85,
       assignedTo: 'GEMEINSAM',
-      category: 'Haushalt/Drogerie',
+      category: 'Haushalt',
       date: getRelativeDateStr(-2),
       paidBy: 'Mitbewohner',
       store: 'dm Drogeriemarkt'
@@ -161,7 +161,7 @@ const MOCK_DATA = {
       quantity: 1,
       price: 4.29,
       assignedTo: 'GEMEINSAM',
-      category: 'Lebensmittel',
+      category: 'Öl & Essig',
       date: getRelativeDateStr(-14),
       paidBy: 'Johannes',
       store: 'Edeka Schleißheimer Str.'
@@ -169,14 +169,50 @@ const MOCK_DATA = {
     {
       id: 'item_mock_7',
       transactionId: 'txn_mock_5',
-      name: 'Kaffeebohnen Crema 1kg',
+      name: 'Schwarzer Pfeffer aus der Mühle',
       quantity: 1,
-      price: 14.99,
+      price: 2.99,
       assignedTo: 'GEMEINSAM',
-      category: 'Lebensmittel',
+      category: 'Gewürze',
       date: getRelativeDateStr(-14),
       paidBy: 'Johannes',
       store: 'Edeka Schleißheimer Str.'
+    },
+    {
+      id: 'item_mock_8',
+      transactionId: 'txn_mock_5',
+      name: 'Mittelscharfer Senf im Glas',
+      quantity: 1,
+      price: 1.29,
+      assignedTo: 'GEMEINSAM',
+      category: 'Kondimente',
+      date: getRelativeDateStr(-20),
+      paidBy: 'Mitbewohner',
+      store: 'Rewe City Schwabing'
+    },
+    {
+      id: 'item_mock_9',
+      transactionId: 'txn_mock_5',
+      name: 'Airfryer-Backpapier 50er Pack',
+      quantity: 1,
+      price: 4.99,
+      assignedTo: 'GEMEINSAM',
+      category: 'Haushalt',
+      date: getRelativeDateStr(-25),
+      paidBy: 'Johannes',
+      store: 'dm Drogeriemarkt'
+    },
+    {
+      id: 'item_mock_10',
+      transactionId: 'txn_mock_5',
+      name: 'Bambus Schneidebrett groß',
+      quantity: 1,
+      price: 8.99,
+      assignedTo: 'GEMEINSAM',
+      category: 'Küchenutensilien',
+      date: getRelativeDateStr(-40),
+      paidBy: 'Johannes',
+      store: 'IKEA München'
     }
   ]
 };
@@ -190,6 +226,7 @@ let appState = {
   activeTab: 'tab-saldo',
   activeInputMode: 'camera',
   activeTimeframe: 'this_month',
+  activePantryCategory: 'all',
   pendingCompressedImage: null,
   reviewTransaction: null,
   reviewItems: [],
@@ -388,18 +425,17 @@ function initEventListeners() {
     });
   });
 
-  // Zuletzt gekauft: Suche & Chips
+  // Zuletzt gekauft / Pantry: Suche & Kategorie-Filter
   const itemSearchInput = document.getElementById('itemSearchInput');
   if (itemSearchInput) {
-    itemSearchInput.addEventListener('input', () => renderRecentItems());
+    itemSearchInput.addEventListener('input', () => renderPantry());
   }
   document.querySelectorAll('#basicChips .chip').forEach(chip => {
     chip.addEventListener('click', () => {
       document.querySelectorAll('#basicChips .chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
-      const filter = chip.getAttribute('data-filter');
-      if (itemSearchInput) itemSearchInput.value = filter;
-      renderRecentItems();
+      appState.activePantryCategory = chip.getAttribute('data-filter') || 'all';
+      renderPantry();
     });
   });
 }
@@ -416,7 +452,7 @@ function switchTab(tabId) {
   if (tabId === 'tab-analyse') {
     renderAnalytics();
   } else if (tabId === 'tab-zuletzt') {
-    renderRecentItems();
+    renderPantry();
   }
 }
 
@@ -1547,60 +1583,169 @@ function generateMockBotAnswer(question) {
 }
 
 // ============================================================================
-// 11. ZULETZT GEKAUFT / QUICK-CHECK (ISSUE #7)
+// 11. WG-PANTRY: DAUERHAFTE VORRÄTE & BASICS (OHNE FRISCHEWARE & PREISE)
 // ============================================================================
 
-function renderRecentItems() {
+const PANTRY_CATEGORIES = {
+  oil_vinegar: {
+    id: 'oil_vinegar',
+    label: 'Öl & Essig',
+    icon: '🫒',
+    pattern: /(öl|speiseöl|olivenöl|rapsöl|sonnenblumenöl|sesamöl|bratöl|essig|vinegar|balsamico|aceto|sojaso[sß]e|tamari|teriyaki|\boil\b)/i
+  },
+  spices: {
+    id: 'spices',
+    label: 'Gewürze',
+    icon: '🧂',
+    pattern: /(salz|salt|pfeffer|pepper|paprikapulver|oregano|basilikum|thymian|rosmarin|curry|kurkuma|zimt|chili|kreuzkümmel|muskat|lorbeer|knoblauchpulver|gewürz|kräuter)/i
+  },
+  condiments: {
+    id: 'condiments',
+    label: 'Kondimente',
+    icon: '🥫',
+    pattern: /(ketchup|senf|mustard|mayo|mayonnaise|sriracha|tabasco|pesto|sambal|remoulade|bbq|barbecue|dressing|worcester|ajvar)/i
+  },
+  cleaning: {
+    id: 'cleaning',
+    label: 'Putzmittel',
+    icon: '🧼',
+    pattern: /(spül|tabs|allzweckreiniger|glasreiniger|scheuermilch|wc-reiniger|badreiniger|putzmittel|putzstein|schwamm|schwämme|lappen|mikrofasertuch|entkalker|klarspüler|waschmittel)/i
+  },
+  household: {
+    id: 'household',
+    label: 'Haushalt',
+    icon: '🧻',
+    pattern: /(müllbeutel|mülltüten|abfallbeutel|backpapier|airfryer|alufolie|frischhaltefolie|toilettenpapier|klopapier|küchenrolle|küchentücher|servietten|zipper|gefrierbeutel|kerzen|feuerzeug|batterien)/i
+  },
+  utensils: {
+    id: 'utensils',
+    label: 'Küchenutensilien',
+    icon: '🔪',
+    pattern: /(schneidebrett|brett|messer|knife|schere|pfannenwender|kochlöffel|schäler|sparschäler|dosenöffner|sieb|reibe|schneebesen|korkenzieher|schöpflöffel|pfanne|topf)/i
+  }
+};
+
+/**
+ * Striktes Whitelist-Filter: Ordnet einen Artikel einer der 6 WG-Kategorien zu.
+ * Gibt null zurück für kurzlebige Kochzutaten (Kürbis, Fleisch, Brot, Milch, Obst etc.)!
+ */
+function classifyPantryItem(item) {
+  if (!item || !item.name) return null;
+  const name = String(item.name).trim();
+  const cat = String(item.pantryCategory || item.category || '').toLowerCase();
+
+  // 1. Prüfung über direkte Gemini-Pantry-Kategorie oder Subkategorie
+  if (cat.includes('öl') || cat.includes('essig') || cat.includes('oil')) return PANTRY_CATEGORIES.oil_vinegar;
+  if (cat.includes('gewürz') || cat.includes('spice')) return PANTRY_CATEGORIES.spices;
+  if (cat.includes('kondiment') || cat.includes('condiment') || cat.includes('senf') || cat.includes('ketchup') || cat.includes('pesto')) return PANTRY_CATEGORIES.condiments;
+  if (cat.includes('putzmittel') || cat.includes('cleaning') || cat.includes('spül')) return PANTRY_CATEGORIES.cleaning;
+  if (cat.includes('utensil')) return PANTRY_CATEGORIES.utensils;
+
+  // 2. Keyword-Matching gegen die 6 Pantry-Kategorien
+  for (const key in PANTRY_CATEGORIES) {
+    if (PANTRY_CATEGORIES[key].pattern.test(name)) {
+      return PANTRY_CATEGORIES[key];
+    }
+  }
+
+  // Alles andere (wie Kürbis, Fleisch, Milch, Nudeln, Obst, Gemüse etc.) ist Frischeware -> null!
+  return null;
+}
+
+/**
+ * Filtert und dedupliziert Pantry-Vorräte: Behält pro Artikel nur den neuesten Kauf!
+ */
+function getDeduplicatedPantryItems(allItems) {
+  const pantryItems = [];
+  const seenMap = new Map();
+
+  // Neueste zuerst sortieren
+  const sorted = [...allItems].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  for (const item of sorted) {
+    const classification = classifyPantryItem(item);
+    if (!classification) continue; // Kurzlebige Frischezutaten ignorieren!
+
+    // Normalisierter Schlüssel zur Vermeidung von Doppel-Einträgen bei Mehrfachkauf
+    const normKey = item.name.toLowerCase()
+      .replace(/(\d+ml|\d+g|\d+kg|\d+er|\d+l)/gi, '')
+      .replace(/[^a-z0-9äöüß]/gi, '')
+      .trim();
+
+    if (!seenMap.has(normKey)) {
+      seenMap.set(normKey, true);
+      pantryItems.push({
+        ...item,
+        pantryCat: classification
+      });
+    }
+  }
+
+  return pantryItems;
+}
+
+function renderPantry() {
   const listEl = document.getElementById('itemsList');
   if (!listEl) return;
 
   const searchInput = document.getElementById('itemSearchInput');
   const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const activeCat = appState.activePantryCategory || 'all';
 
-  let items = [...appState.items];
+  // 1. Nur echte Pantry-Vorräte holen & deduplizieren
+  let items = getDeduplicatedPantryItems(appState.items);
 
-  // Suchfilter
+  // 2. Kategorie-Filter anwenden
+  if (activeCat && activeCat !== 'all') {
+    items = items.filter(it => it.pantryCat && it.pantryCat.id === activeCat);
+  }
+
+  // 3. Textsuche anwenden
   if (query) {
     items = items.filter(it => 
       (it.name || '').toLowerCase().includes(query) ||
       (it.store || '').toLowerCase().includes(query) ||
-      (it.category || '').toLowerCase().includes(query)
+      (it.pantryCat && it.pantryCat.label.toLowerCase().includes(query))
     );
   }
 
   if (items.length === 0) {
     listEl.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">🔍</div>
-        <p>Keine passenden Artikel gefunden.<br>Nutze die Bon-Erfassung, um neue Artikel automatisch hinzuzufügen!</p>
+        <div class="empty-icon">🥫</div>
+        <p>Keine WG-Vorräte in dieser Auswahl.<br>Einmalige Kochzutaten (z. B. Kürbis, Fleisch) werden hier bewusst ausgeblendet.</p>
       </div>
     `;
     return;
   }
 
-  // Neueste zuerst
-  items.sort((a, b) => new Date(b.date) - new Date(a.date));
-
   listEl.innerHTML = items.map(it => {
     const timeAgoStr = getTimeAgo(it.date);
     const datePretty = formatDatePretty(it.date);
+    const cat = it.pantryCat || PANTRY_CATEGORIES.household;
 
     return `
-      <div class="item-card">
-        <div class="item-left">
-          <div class="item-name">${escapeHtml(it.name)}</div>
-          <div class="item-details">
-            <span>📅 ${timeAgoStr} (${datePretty})</span>
-            ${it.store ? `<span>• 🏪 ${escapeHtml(it.store)}</span>` : ''}
+      <div class="pantry-card">
+        <div class="pantry-left">
+          <div class="pantry-icon">${cat.icon}</div>
+          <div class="pantry-info">
+            <div class="pantry-title">${escapeHtml(it.name)}</div>
+            <span class="pantry-category-badge">${cat.label}</span>
           </div>
         </div>
-        <div class="item-price-tag">
-          <div class="item-price">${formatEuro(it.price)}</div>
-          <div class="item-buyer">${escapeHtml(it.paidBy || 'WG')}</div>
+        <div class="pantry-right">
+          <div class="pantry-time-ago">${timeAgoStr}</div>
+          <div class="pantry-meta">am ${datePretty}</div>
+          <div class="pantry-meta">von <strong>${escapeHtml(it.paidBy || 'WG')}</strong></div>
         </div>
       </div>
     `;
   }).join('');
+}
+
+// Kompatibilitäts-Alias
+function renderRecentItems() {
+  renderPantry();
 }
 
 // ============================================================================
