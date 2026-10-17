@@ -333,35 +333,24 @@ Regeln:
     return createJsonResponse({ success: false, error: 'Weder Bild noch Freitext übergeben' }, 400);
   }
 
-  // Gemini API Call (gemini-2.5-flash)
-  const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-
-  const requestOptions = {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify({
-      contents: [{ parts: geminiParts }],
-      generationConfig: {
+  // Gemini API Call mit dynamischer Modell-Auswahl & automatischem Fallback
+  let geminiData = null;
+  try {
+    geminiData = callGeminiApi(
+      [{ parts: geminiParts }],
+      {
         temperature: 0.1,
         response_mime_type: 'application/json'
-      }
-    }),
-    muteHttpExceptions: true
-  };
-
-  const response = UrlFetchApp.fetch(endpoint, requestOptions);
-  const responseCode = response.getResponseCode();
-  const responseText = response.getContentText();
-
-  if (responseCode !== 200) {
-    Logger.log('Gemini API Error: ' + responseText);
+      },
+      scriptProps
+    );
+  } catch (err) {
     return createJsonResponse({
       success: false,
-      error: 'Gemini API Fehler (' + responseCode + '): ' + responseText
+      error: 'Gemini API Fehler: ' + err.message
     }, 500);
   }
 
-  const geminiData = JSON.parse(responseText);
   let parsedContent = null;
 
   try {
@@ -539,32 +528,80 @@ Anweisungen:
 3. Begleichungen (Typ: SETTLEMENT) sind Schuldenausgleiche und gehören NICHT zu Konsumausgaben!
 4. Fasse dich kurz, nutze gerne Aufzählungspunkte oder Emojis für gute Lesbarkeit auf dem Smartphone.`;
 
-  const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-
-  const requestOptions = {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.2
-      }
-    }),
-    muteHttpExceptions: true
-  };
-
-  const response = UrlFetchApp.fetch(endpoint, requestOptions);
-  const responseData = JSON.parse(response.getContentText());
-
-  if (response.getResponseCode() !== 200) {
+  let responseData = null;
+  try {
+    responseData = callGeminiApi(
+      [{ parts: [{ text: prompt }] }],
+      { temperature: 0.2 },
+      scriptProps
+    );
+  } catch (err) {
     return createJsonResponse({
       success: false,
-      error: 'Fehler beim Aufruf des KI-Modells: ' + response.getContentText()
+      error: 'Fehler beim Aufruf des KI-Modells: ' + err.message
     }, 500);
   }
 
   const answer = responseData.candidates[0].content.parts[0].text;
   return createJsonResponse({ success: true, answer: answer });
+}
+
+/**
+ * Ruft die Gemini API mit flexibler Modellauswahl und automatischem Fallback auf
+ */
+function callGeminiApi(contents, generationConfig, scriptProps) {
+  const apiKey = scriptProps.getProperty('GEMINI_API_KEY');
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY fehlt in den Script Properties.');
+  }
+
+  // Modell aus Skripteigenschaft oder bewährte Fallbacks
+  const customModel = scriptProps.getProperty('GEMINI_MODEL');
+  const candidateModels = customModel 
+    ? [customModel, 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash'] 
+    : ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash'];
+
+  let lastError = null;
+
+  for (let i = 0; i < candidateModels.length; i++) {
+    const model = candidateModels[i];
+    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey;
+
+    const requestOptions = {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        contents: contents,
+        generationConfig: generationConfig
+      }),
+      muteHttpExceptions: true
+    };
+
+    try {
+      const response = UrlFetchApp.fetch(endpoint, requestOptions);
+      const code = response.getResponseCode();
+      const text = response.getContentText();
+
+      if (code === 200) {
+        return JSON.parse(text);
+      } else {
+        Logger.log('Modell ' + model + ' fehlgeschlagen (' + code + '): ' + text);
+        lastError = 'Modell ' + model + ' (' + code + '): ' + text;
+        // Bei 404 (Modell existiert nicht) oder 400 (Modell nicht unterstützt) probiere nächstes Modell
+        if (code !== 404 && code !== 400) {
+          throw new Error(lastError);
+        }
+      }
+    } catch (e) {
+      lastError = e.message || String(e);
+      // Wenn letztes Modell erreicht, weiterwerfen
+      if (i === candidateModels.length - 1) {
+        throw new Error(lastError);
+      }
+    }
+  }
+
+  throw new Error(lastError || 'Kein Gemini-Modell konnte erfolgreich aufgerufen werden.');
 }
 
 /**

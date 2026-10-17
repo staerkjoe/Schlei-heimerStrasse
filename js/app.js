@@ -15,7 +15,7 @@ const STORAGE_KEYS = {
 
 const DEFAULT_CONFIG = {
   scriptUrl: '',
-  secretToken: 'schleissheimer2026',
+  secretToken: '',
   userA: 'Johannes',
   userB: 'Mitbewohner',
   activeUser: 'Johannes',
