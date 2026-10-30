@@ -358,8 +358,25 @@ Regeln:
   let parsedContent = null;
 
   try {
-    const rawAnswer = geminiData.candidates[0].content.parts[0].text;
-    const cleanJson = rawAnswer.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+    const candidate = geminiData && geminiData.candidates && geminiData.candidates[0];
+    if (!candidate || !candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+      const reason = (candidate && candidate.finishReason) || 'UNBEKANNT';
+      return createJsonResponse({
+        success: false,
+        error: 'Gemini hat keinen Text generiert (Status: ' + reason + '). Bitte erneut versuchen oder Beleg deutlicher abfotografieren.'
+      }, 500);
+    }
+
+    const rawAnswer = candidate.content.parts[0].text || '';
+    let cleanJson = rawAnswer.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    // Falls zusätzlicher Text vor/nach dem JSON steht, JSON-Objekt isolieren
+    const firstBrace = cleanJson.indexOf('{');
+    const lastBrace = cleanJson.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+    }
+
     parsedContent = JSON.parse(cleanJson);
   } catch (err) {
     return createJsonResponse({
@@ -517,11 +534,11 @@ Datum heute: ${Utilities.formatDate(new Date(), 'Europe/Berlin', 'yyyy-MM-dd')}.
 
 Hier ist die Datenbank der WG:
 
---- AUSGABEN & BEGLEICHUNGEN (Transaktionen) ---
-${transSummary.slice(-100).join('\n')}
+--- AUSGABEN & BEGLEICHUNGEN (Transaktionen, letzte 50) ---
+${transSummary.slice(-50).join('\n')}
 
---- EINZELARTIKEL (Kassenbon-Posten) ---
-${itemsSummary.slice(-250).join('\n')}
+--- EINZELARTIKEL (Kassenbon-Posten, letzte 120) ---
+${itemsSummary.slice(-120).join('\n')}
 
 Frage des Nutzers:
 "${question}"
@@ -546,12 +563,21 @@ Anweisungen:
     }, 500);
   }
 
-  const answer = responseData.candidates[0].content.parts[0].text;
+  const candidate = responseData && responseData.candidates && responseData.candidates[0];
+  if (!candidate || !candidate.content || !candidate.content.parts || candidate.content.parts.length === 0 || !candidate.content.parts[0].text) {
+    const reason = (candidate && candidate.finishReason) || 'UNBEKANNT';
+    return createJsonResponse({
+      success: false,
+      error: 'Der Chatbot konnte keine Antwort generieren (Status: ' + reason + ').'
+    }, 500);
+  }
+
+  const answer = candidate.content.parts[0].text || '';
   return createJsonResponse({ success: true, answer: answer });
 }
 
 /**
- * Ruft die Gemini API mit flexibler Modellauswahl und automatischem Fallback auf
+ * Ruft die Gemini API mit flexibler Modellauswahl, automatischem Retry und Fallback auf
  */
 function callGeminiApi(contents, generationConfig, scriptProps) {
   const apiKey = scriptProps.getProperty('GEMINI_API_KEY');
@@ -561,9 +587,23 @@ function callGeminiApi(contents, generationConfig, scriptProps) {
 
   // Konfiguriertes Modell oder Fallbacks (bevorzugt gemini-3.8-flash)
   const customModel = scriptProps.getProperty('GEMINI_MODEL');
-  const candidateModels = customModel 
-    ? [customModel, 'gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'] 
-    : ['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  const trimmedCustom = customModel ? customModel.trim() : '';
+  
+  // Modelle filtern (z.B. altes/gesperrtes gemini-2.5-flash ignorieren)
+  const baseCandidates = ['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  let rawModels = [];
+  if (trimmedCustom && trimmedCustom !== 'gemini-2.5-flash') {
+    rawModels.push(trimmedCustom);
+  }
+  rawModels = rawModels.concat(baseCandidates);
+
+  // Duplikate entfernen
+  const candidateModels = [];
+  rawModels.forEach(m => {
+    if (m && candidateModels.indexOf(m) === -1) {
+      candidateModels.push(m);
+    }
+  });
 
   let lastError = null;
 
@@ -581,26 +621,44 @@ function callGeminiApi(contents, generationConfig, scriptProps) {
       muteHttpExceptions: true
     };
 
-    try {
-      const response = UrlFetchApp.fetch(endpoint, requestOptions);
-      const code = response.getResponseCode();
-      const text = response.getContentText();
+    // Bis zu 2 Versuche pro Modell bei temporären Fehlern (503 Überlastung / 429 Rate Limit / 500 Serverfehler)
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const response = UrlFetchApp.fetch(endpoint, requestOptions);
+        const code = response.getResponseCode();
+        const text = response.getContentText();
 
-      if (code === 200) {
-        return JSON.parse(text);
-      } else {
-        Logger.log('Modell ' + model + ' fehlgeschlagen (' + code + '): ' + text);
-        lastError = 'Modell ' + model + ' (' + code + '): ' + text;
-        // Bei 404 (Modell existiert nicht) oder 400 (Modell nicht unterstützt) probiere nächstes Modell
-        if (code !== 404 && code !== 400) {
-          throw new Error(lastError);
+        if (code === 200) {
+          return JSON.parse(text);
         }
-      }
-    } catch (e) {
-      lastError = e.message || String(e);
-      // Wenn letztes Modell erreicht, weiterwerfen
-      if (i === candidateModels.length - 1) {
-        throw new Error(lastError);
+
+        Logger.log('Modell ' + model + ' (Versuch ' + attempt + ') fehlgeschlagen (' + code + '): ' + text);
+        lastError = 'Modell ' + model + ' (' + code + '): ' + text;
+
+        // Falscher API-Key -> Sofort abbrechen
+        if (code === 401 || code === 403) {
+          throw new Error('GEMINI_API_KEY ungültig oder unberechtigt (Code ' + code + '). Bitte Key prüfen.');
+        }
+
+        // Temporäre Überlastung oder Rate-Limit: Beim 1. Versuch kurz warten und nochmals versuchen
+        if ((code === 503 || code === 429 || code === 500) && attempt === 1) {
+          Utilities.sleep(1200);
+          continue;
+        }
+
+        // Bei 404 (Modell existiert nicht), 400 (ungültige Option) oder nach 2 Fehlversuchen:
+        // Breche diesen Modell-Versuch ab und teste nächstes Modell in candidateModels
+        break;
+      } catch (e) {
+        lastError = e.message || String(e);
+        if (lastError.indexOf('GEMINI_API_KEY ungültig') !== -1) {
+          throw e;
+        }
+        if (attempt === 1) {
+          Utilities.sleep(1000);
+          continue;
+        }
+        break;
       }
     }
   }
