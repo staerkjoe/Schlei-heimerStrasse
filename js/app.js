@@ -720,8 +720,8 @@ function handleImageSelected(file) {
   const compressionBadge = document.getElementById('compressionBadge');
   const btnAnalyze = document.getElementById('btnAnalyzeReceipt');
 
-  // Bild mit Canvas auf max 1400px komprimieren (~200-300 KB statt 5-10 MB)
-  compressImage(file, 1400, 0.82).then(result => {
+  // Bild mit Canvas auf max 1024px komprimieren (~80-150 KB für spürbar schnelleren Upload & KI-Verarbeitung)
+  compressImage(file, 1024, 0.70).then(result => {
     appState.pendingCompressedImage = result.base64;
     previewImg.src = result.base64;
     previewContainer.style.display = 'block';
@@ -1347,7 +1347,14 @@ async function callBackend(action, payload) {
     redirect: 'follow'
   });
 
-  const data = await response.json();
+  const responseText = await response.text();
+  let data;
+  try {
+    data = JSON.parse(responseText);
+  } catch (err) {
+    console.error('Ungültige Server-Antwort:', responseText);
+    throw new Error('Ungültige Antwort vom Server (Google Apps Script). Bitte prüfe, ob die Web-App aktuell bereitgestellt ist.');
+  }
   return data;
 }
 
